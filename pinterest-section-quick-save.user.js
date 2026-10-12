@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.1.6
+// @version      0.1.7
 // @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+クリック / Alt+S / Shift+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -115,8 +115,20 @@
     const r = row.getBoundingClientRect();
     const target = document.elementFromPoint(r.right - 24, r.top + r.height / 2);
     if (!target) return false;
-    target.click();
+    toast('進行: 矢印をクリック(' + target.tagName + ')');
+    realClick(target);
     return true;
+  }
+
+  // マウス操作と同じイベント列を要素の中心に送る(click()だけでは反応しない行があるため)
+  function realClick(el) {
+    const r = el.getBoundingClientRect();
+    const init = { bubbles: true, cancelable: true, view: window,
+      clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
+    for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+      const Ctor = type.startsWith('pointer') ? PointerEvent : MouseEvent;
+      el.dispatchEvent(new Ctor(type, init));
+    }
   }
 
   // 保存先ピッカー(見出しを含む最小の祖先)の中だけから探す。ピン上のボタンの文字を拾わないため
@@ -138,18 +150,22 @@
     if (!dropdown) { debugDump(); toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
 
     dropdown.click();
+    toast('進行: プルダウンを開きました');
     const boardEl = await waitFor(() => findInPicker(['保存する'], current.board));
     if (!boardEl) { dumpTexts('ボード未検出'); toast('ボード「' + current.board + '」が一覧に見つかりません', true); return; }
 
     if (!current.section) {
-      boardEl.click(); // セクション指定なし: ボード行のクリックで保存
+      toast('進行: ボード行をクリック');
+      realClick(boardEl); // セクション指定なし: ボード行のクリックで保存
     } else {
       if (!openSubboards(boardEl)) { toast('ボード行の矢印を押せませんでした', true); return; }
       const header = await waitFor(() => findByText(document.body, 'サブボード'));
       if (!header) { dumpTexts('サブボード画面未検出'); toast('サブボードの画面が開きませんでした(このボードにはサブボードがない可能性)', true); return; }
+      toast('進行: サブボード画面を確認');
       const sectionEl = findInPicker(['サブボード'], current.section);
       if (!sectionEl) { dumpTexts('サブボード画面'); toast('サブボード「' + current.section + '」が見つかりません', true); return; }
-      sectionEl.click();
+      toast('進行: サブボード「' + current.section + '」をクリック');
+      realClick(sectionEl);
     }
     toast('クリックしました: ' + current.board + (current.section ? ' / ' + current.section : '') +
       '(保存先は通知で確認してください)');
@@ -220,7 +236,7 @@
     }
   }
   render();
-  toast('Pinterest Section Quick Save v0.1.6 起動');
+  toast('Pinterest Section Quick Save v0.1.7 起動');
 
   document.addEventListener('mousemove', (e) => {
     if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastHover = e.target;
