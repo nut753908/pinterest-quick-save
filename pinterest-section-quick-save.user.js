@@ -197,12 +197,13 @@
     if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastHover = e.target;
   }, { passive: true });
 
-  document.addEventListener('keydown', (e) => {
-    if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS') {
-      const t = e.target;
-      if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;
+  // Pinterest側に止められないよう、キャプチャ段階で受け取る
+  window.addEventListener('keydown', (e) => {
+    if (e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'KeyS' || e.key.toLowerCase() === 's')) {
+      console.log('[PSQ] Alt+S を受け取りました');
       e.preventDefault();
+      e.stopPropagation();
       savePin();
     }
-  });
+  }, true);
 })();
