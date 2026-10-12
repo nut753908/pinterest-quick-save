@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.2.2
+// @version      0.2.3
 // @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.2.2'; // @version と合わせる
+  const VERSION = '0.2.3'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -72,7 +72,19 @@
     return findByText(document.body, '保存');
   }
 
+  // ホバー中の要素から親をたどり、保存先プルダウンのボタンを識別子で探す(「保存済み」表示でも使える)
+  function findDropdownByTestId() {
+    const sel = '[data-test-id="PinBetterSaveDropdown"]';
+    for (let el = lastHover; el && el !== document.documentElement; el = el.parentElement) {
+      const hit = [...el.querySelectorAll(sel)].find(visible);
+      if (hit) return hit;
+    }
+    return [...document.querySelectorAll(sel)].find(visible) || null;
+  }
+
   function findDropdownButton() {
+    const byId = findDropdownByTestId();
+    if (byId) return byId;
     const label = findSaveLabel();
     if (!label) return null;
     const saveBtn = label.closest(CLICKABLE) || label;
