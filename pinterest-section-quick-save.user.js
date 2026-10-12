@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.8.1
+// @version      0.8.2
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、S キー(1キー)またはボタンで1ピンずつ保存する(保存済みのピンでは保存を解除する)。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.8.1'; // @version と合わせる
+  const VERSION = '0.8.2'; // @version と合わせる
   const HOTKEY = 'KeyS'; // 保存キー(修飾キーなしの1キー)。変えるときはKeyAなどのcodeを指定する
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -83,6 +83,16 @@
     return null;
   }
 
+  // マウスが、そのボタンのピン(画像/動画を含む最小の範囲)の中にあるか。
+  // 詳細画面で、ピンの外の何もない場所にマウスがあるときに、反応しないようにする
+  function pointInPinArea(btn) {
+    let box = btn.parentElement;
+    while (box && box !== document.body && !box.querySelector('img,video')) box = box.parentElement;
+    if (!box || box === document.body) return true; // 範囲を決められないときは制限しない
+    const r = box.getBoundingClientRect();
+    return lastPoint.x >= r.left && lastPoint.x <= r.right && lastPoint.y >= r.top && lastPoint.y <= r.bottom;
+  }
+
   // マウス下の要素から親をたどり、data-test-idの要素を探す。
   // 最初に見つかった祖先内に1つだけのときだけ採用する(複数あれば、どのピンか決められないので対象なし)
   function findByTestId(id) {
@@ -90,7 +100,7 @@
     let el = hoverTarget();
     for (let d = 0; el && d < MAX_UP && el !== document.documentElement; el = el.parentElement, d++) {
       const hits = [...el.querySelectorAll(sel)].filter(visible);
-      if (hits.length === 1) return hits[0];
+      if (hits.length === 1) return pointInPinArea(hits[0]) ? hits[0] : null;
       if (hits.length > 1) return null;
     }
     return null;
