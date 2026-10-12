@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.1.3
-// @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+S / Shift+Sまたはボタンで1ピンずつ保存する。外部通信なし。
+// @version      0.1.4
+// @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+クリック / Alt+S / Shift+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -192,25 +192,42 @@
     }
   }
   render();
-  toast('Pinterest Section Quick Save v0.1.3 起動');
+  toast('Pinterest Section Quick Save v0.1.4 起動');
 
   document.addEventListener('mousemove', (e) => {
     if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastHover = e.target;
   }, { passive: true });
 
-  // Pinterest側に止められないよう、キャプチャ段階で受け取る
-  window.addEventListener('keydown', (e) => {
+  // Pinterest側に止められないよう、キャプチャ段階で受け取る(window/documentの両方、重複は排除)
+  let lastKeyStamp = -1;
+  const onKey = (e) => {
+    if (e.type === 'keydown' && e.timeStamp === lastKeyStamp) return;
+    if (e.type === 'keydown') lastKeyStamp = e.timeStamp;
+    toast('診断: ' + e.type + ' key=' + e.key + ' code=' + e.code + ' alt=' + e.altKey + ' shift=' + e.shiftKey); // 診断用(全キー)
+    if (e.type !== 'keydown') return;
     const t = e.target;
     const typing = t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
-    toast('診断: key=' + e.key + ' code=' + e.code + ' alt=' + e.altKey + ' shift=' + e.shiftKey); // 診断用(全キー)
     const altS = e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS';
     const shiftS = !typing && e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS';
     if (altS || shiftS) {
-      console.log('[PSQ] ホットキーを受け取りました');
       toast('ホットキーを受け取りました');
       e.preventDefault();
       e.stopPropagation();
       savePin();
     }
+  };
+  for (const target of [window, document]) {
+    target.addEventListener('keydown', onKey, true);
+    target.addEventListener('keyup', onKey, true);
+  }
+
+  // キーボードに頼らない方法: Altを押しながらピンをクリックで保存
+  window.addEventListener('click', (e) => {
+    if (!e.altKey || e.target.closest('#' + PANEL_ID)) return;
+    lastHover = e.target;
+    e.preventDefault();
+    e.stopPropagation();
+    toast('Alt+クリックを受け取りました');
+    savePin();
   }, true);
 })();
