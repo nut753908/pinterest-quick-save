@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.1.7
+// @version      0.1.8
 // @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+クリック / Alt+S / Shift+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
-// @run-at       document-idle
+// @run-at       document-start
 // ==/UserScript==
 
 (() => {
@@ -56,7 +56,7 @@
       'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:2147483647;' +
       'padding:10px 16px;border-radius:8px;color:#fff;font:14px sans-serif;' +
       'background:' + (isError ? '#c0392b' : '#2c3e50');
-    document.body.appendChild(el);
+    (document.body || document.documentElement).appendChild(el);
     setTimeout(() => el.remove(), 3500);
   }
 
@@ -236,7 +236,11 @@
     }
   }
   render();
-  toast('Pinterest Section Quick Save v0.1.7 起動');
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => toast('Pinterest Section Quick Save v0.1.8 起動'));
+  } else {
+    toast('Pinterest Section Quick Save v0.1.8 起動');
+  }
 
   document.addEventListener('mousemove', (e) => {
     if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastHover = e.target;
@@ -254,7 +258,7 @@
     if (altS || shiftS) {
       toast('ホットキーを受け取りました');
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       savePin();
     }
   };
@@ -267,7 +271,7 @@
     if (!e.altKey || e.target.closest('#' + PANEL_ID)) return;
     lastHover = e.target;
     e.preventDefault();
-    e.stopPropagation();
+    e.stopImmediatePropagation();
     toast('Alt+クリックを受け取りました');
     savePin();
   }, true);
