@@ -1,9 +1,11 @@
 // ==UserScript==
 // @name         Pinterest Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.9.2
+// @version      0.9.3
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、S キー(1キー)またはボタンで1ピンずつ保存する(保存済みのピンでは保存を解除する)。外部通信なし。
 // @match        https://jp.pinterest.com/*
+// @updateURL    https://raw.githubusercontent.com/nut753908/pinterest-quick-save/main/pinterest-quick-save.user.js
+// @downloadURL  https://raw.githubusercontent.com/nut753908/pinterest-quick-save/main/pinterest-quick-save.user.js
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @run-at       document-start
@@ -12,7 +14,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.9.2'; // @version と合わせる
+  const VERSION = '0.9.3'; // @version と合わせる
   const HOTKEY = 'KeyS'; // 保存キー(修飾キーなしの1キー)。変えるときはKeyAなどのcodeを指定する
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
