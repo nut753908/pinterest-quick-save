@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.1.9
+// @version      0.1.10
 // @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+クリック / Alt+S / Shift+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.1.9'; // @version と合わせる
+  const VERSION = '0.1.10'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -124,7 +124,7 @@
   // マウス操作と同じイベント列を要素の中心に送る(click()だけでは反応しない行があるため)
   function realClick(el) {
     const r = el.getBoundingClientRect();
-    const init = { bubbles: true, cancelable: true, view: window,
+    const init = { bubbles: true, cancelable: true,
       clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
     for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
       const Ctor = type.startsWith('pointer') ? PointerEvent : MouseEvent;
@@ -150,7 +150,7 @@
     const dropdown = findDropdownButton();
     if (!dropdown) { debugDump(); toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
 
-    dropdown.click();
+    if (dropdown.getAttribute('aria-expanded') !== 'true') dropdown.click(); // 開いたままなら閉じてしまうので押さない
     toast('進行: プルダウンを開きました');
     const boardEl = await waitFor(() => findInPicker(['保存する'], current.board));
     if (!boardEl) { dumpTexts('ボード未検出'); toast('ボード「' + current.board + '」が一覧に見つかりません', true); return; }
