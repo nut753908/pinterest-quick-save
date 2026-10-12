@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.5.0
-// @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
+// @version      0.6.0
+// @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、S キー(1キー)またはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -12,7 +12,8 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.5.0'; // @version と合わせる
+  const VERSION = '0.6.0'; // @version と合わせる
+  const HOTKEY = 'KeyS'; // 保存キー(修飾キーなしの1キー)。変えるときはKeyAなどのcodeを指定する
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -255,9 +256,11 @@
     manageList.replaceChildren(...rows, clear);
   }
 
-  async function savePin() {
-    if (!current.board) { toast('先に保存先のボードを選択してください', true); return; }
+  // quiet: キー操作用。ピンにマウスが乗っていないときは、通知を出さず何もしない
+  async function savePin(quiet) {
     const dropdown = findDropdownButton();
+    if (quiet && !dropdown && !findByTestId('saved-button')) return;
+    if (!current.board) { toast('先に保存先のボードを選択してください', true); return; }
     if (!dropdown && findByTestId('saved-button')) {
       // 「保存済み」ボタンは押すと保存が削除されるため、何もしない
       toast('保存済みのピンです。実行しません');
@@ -388,7 +391,7 @@
     const row = el('div', {}, 'display:flex;gap:6px;margin-top:4px');
     const setBtn = el('button', { textContent: '設定' }, btnCss + ';background:#555');
     setBtn.onclick = () => setCurrent(board.value, section.value);
-    const saveBtn = el('button', { textContent: 'このピンを保存 (Alt+S)' }, btnCss + ';flex:1');
+    const saveBtn = el('button', { textContent: 'このピンを保存 (S)' }, btnCss + ';flex:1');
     saveBtn.onmousedown = (e) => e.preventDefault(); // ホバー状態を保つ
     saveBtn.onclick = () => { setCurrent(board.value, section.value); savePin(); };
     row.append(setBtn, saveBtn);
@@ -428,10 +431,11 @@
 
   // Pinterest側より先に受け取るため、キャプチャ段階で登録する
   document.addEventListener('keydown', (e) => {
-    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === 'KeyS') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      savePin();
-    }
+    if (e.code !== HOTKEY || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat || e.isComposing) return;
+    const t = e.target;
+    if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return; // 文字入力中は何もしない
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    savePin(true);
   }, true);
 })();
