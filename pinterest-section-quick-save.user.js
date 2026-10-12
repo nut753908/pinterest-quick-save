@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.1.8
+// @version      0.1.9
 // @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+クリック / Alt+S / Shift+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -237,7 +237,7 @@
   }
   render();
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => toast('Pinterest Section Quick Save v0.1.8 起動'));
+    document.addEventListener('DOMContentLoaded', () => toast('Pinterest Section Quick Save v0.1.9 起動'));
   } else {
     toast('Pinterest Section Quick Save v0.1.8 起動');
   }
@@ -249,6 +249,7 @@
   // Pinterest側に止められないよう、キャプチャ段階で受け取る(window/documentの両方、重複は排除)
   let lastKeyStamp = -1;
   const onKey = (e) => {
+    console.log('[PSQ] keydown', e.key, e.code, 'alt=' + e.altKey, 'target=', e.target && e.target.tagName, 'listener=', e.currentTarget === window ? 'window' : 'document');
     if (e.timeStamp === lastKeyStamp) return;
     lastKeyStamp = e.timeStamp;
     const t = e.target;
@@ -266,8 +267,11 @@
     target.addEventListener('keydown', onKey, true);
   }
 
+  console.log('[PSQ] リスナー登録完了 readyState=' + document.readyState);
+
   // キーボードに頼らない方法: Altを押しながらピンをクリックで保存
   window.addEventListener('click', (e) => {
+    console.log('[PSQ] click alt=' + e.altKey, e.target);
     if (!e.altKey || e.target.closest('#' + PANEL_ID)) return;
     lastHover = e.target;
     e.preventDefault();
