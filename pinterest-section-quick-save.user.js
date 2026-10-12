@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.8.0
+// @version      0.8.1
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、S キー(1キー)またはボタンで1ピンずつ保存する(保存済みのピンでは保存を解除する)。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.8.0'; // @version と合わせる
+  const VERSION = '0.8.1'; // @version と合わせる
   const HOTKEY = 'KeyS'; // 保存キー(修飾キーなしの1キー)。変えるときはKeyAなどのcodeを指定する
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -23,7 +23,7 @@
 
   let current = load('current', { board: '', section: '' });
   let history = load('history', []);
-  let lastHover = null;
+  let lastPoint = null; // マウスの最後の位置(パネル外)
 
   const visible = (el) => el.getClientRects().length > 0;
   const text = (el) => (el.textContent || '').replace(/\s+/g, ' ').trim();
@@ -64,23 +64,36 @@
 
   const CLICKABLE = 'button,[role=button],a,[aria-haspopup]';
 
-  // ホバー中の要素から親をたどり、「保存」ラベルを含む最も近い祖先内で探す
+  const MAX_UP = 15; // 親をたどる最大段数(離れた別のピンまで探さないため)
+
+  // 今マウスの下にある要素(スクロールしてマウスを動かしていなくても、今の位置で調べる)
+  function hoverTarget() {
+    if (!lastPoint) return null;
+    const el = document.elementFromPoint(lastPoint.x, lastPoint.y);
+    return el && !el.closest('#' + PANEL_ID) ? el : null;
+  }
+
+  // マウス下の要素から親をたどり、「保存」ラベルを含む最も近い祖先内で探す
   function findSaveLabel() {
-    for (let el = lastHover; el && el !== document.documentElement; el = el.parentElement) {
+    let el = hoverTarget();
+    for (let d = 0; el && d < MAX_UP && el !== document.documentElement; el = el.parentElement, d++) {
       const hit = findByText(el, '保存');
       if (hit) return hit;
     }
-    return findByText(document.body, '保存');
+    return null;
   }
 
-  // ホバー中の要素から親をたどり、data-test-idで表示中の要素を探す
+  // マウス下の要素から親をたどり、data-test-idの要素を探す。
+  // 最初に見つかった祖先内に1つだけのときだけ採用する(複数あれば、どのピンか決められないので対象なし)
   function findByTestId(id) {
     const sel = '[data-test-id="' + id + '"]';
-    for (let el = lastHover; el && el !== document.documentElement; el = el.parentElement) {
-      const hit = [...el.querySelectorAll(sel)].find(visible);
-      if (hit) return hit;
+    let el = hoverTarget();
+    for (let d = 0; el && d < MAX_UP && el !== document.documentElement; el = el.parentElement, d++) {
+      const hits = [...el.querySelectorAll(sel)].filter(visible);
+      if (hits.length === 1) return hits[0];
+      if (hits.length > 1) return null;
     }
-    return [...document.querySelectorAll(sel)].find(visible) || null;
+    return null;
   }
 
   function findDropdownButton() {
@@ -441,7 +454,7 @@
     }
   }, true);
   document.addEventListener('mousemove', (e) => {
-    if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastHover = e.target;
+    if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastPoint = { x: e.clientX, y: e.clientY };
   }, { passive: true });
 
   // Pinterest側より先に受け取るため、キャプチャ段階で登録する
@@ -449,6 +462,8 @@
     if (e.code !== HOTKEY || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.repeat || e.isComposing) return;
     const t = e.target;
     if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return; // 文字入力中は何もしない
+    // 保存の対象のピンがあるときだけキーを止める(ないときは、そのままPinterestに渡す)
+    if (!findDropdownButton() && !findByTestId('saved-button')) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     savePin(true);
