@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.2.1
+// @version      0.2.2
 // @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.2.1'; // @version と合わせる
+  const VERSION = '0.2.2'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -137,6 +137,13 @@
 
     if (!current.section) {
       realClick(boardEl); // セクション指定なし: ボード行のクリックで保存
+      // サブボードを持つボードは選択画面が開くので、「ボード」欄のボード自身をもう一度クリックする
+      const header = await waitFor(() => findByText(document.body, 'サブボード'), 1500);
+      if (header) {
+        const self = findInPicker(['サブボード'], current.board);
+        if (!self) { toast('ボード「' + current.board + '」の項目が見つかりません', true); return; }
+        realClick(self);
+      }
     } else {
       if (!openSubboards(boardEl)) { toast('ボード行の矢印を押せませんでした', true); return; }
       const header = await waitFor(() => findByText(document.body, 'サブボード'));
