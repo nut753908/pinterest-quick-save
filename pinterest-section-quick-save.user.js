@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.3.2
+// @version      0.3.3
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選べる)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.3.2'; // @version と合わせる
+  const VERSION = '0.3.3'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -181,7 +181,7 @@
     const after = items.filter((t) => header.compareDocumentPosition(t.el) & 4);  // 見出しより後
     if (!before.length) return;
     const board = before[before.length - 1].name;
-    const secs = [...new Set(after.map((t) => t.name))];
+    const secs = [...new Set(after.map((t) => t.name))].filter((n) => n !== 'サブボードを作成する');
     let changed = false;
     if (!catalog.boards.includes(board)) { catalog.boards.push(board); changed = true; }
     if (JSON.stringify(catalog.sections[board] || []) !== JSON.stringify(secs)) {
