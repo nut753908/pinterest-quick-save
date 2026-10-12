@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.9.1
+// @version      0.9.0
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、S キー(1キー)で、マウスを乗せたピンを1つずつ保存する(保存済みのピンでは保存を解除する)。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.9.1'; // @version と合わせる
+  const VERSION = '0.9.0'; // @version と合わせる
   const HOTKEY = 'KeyS'; // 保存キー(修飾キーなしの1キー)。変えるときはKeyAなどのcodeを指定する
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -425,9 +425,6 @@
     const board = boardCombo.state;
     const section = sectionCombo.state;
     panel.append(boardCombo.wrap, sectionCombo.wrap);
-
-    panel.appendChild(el('div', { textContent: 'S キー: マウスを乗せたピンを保存 / 保存済みなら解除' },
-      'margin-top:6px;color:#666;font-size:12px'));
 
     const details = el('details', {}, 'margin-top:8px');
     details.appendChild(el('summary', { textContent: '候補の管理' }, 'cursor:pointer;color:#666'));
