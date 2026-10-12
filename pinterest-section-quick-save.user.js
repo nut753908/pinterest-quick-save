@@ -12,6 +12,7 @@
 (() => {
   'use strict';
 
+  const VERSION = '0.1.9'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -237,9 +238,9 @@
   }
   render();
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => toast('Pinterest Section Quick Save v0.1.9 起動'));
+    document.addEventListener('DOMContentLoaded', () => toast('Pinterest Section Quick Save v' + VERSION + ' 起動'));
   } else {
-    toast('Pinterest Section Quick Save v0.1.8 起動');
+    toast('Pinterest Section Quick Save v' + VERSION + ' 起動');
   }
 
   document.addEventListener('mousemove', (e) => {
