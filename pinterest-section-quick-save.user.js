@@ -93,15 +93,30 @@
     if (label) console.log('[PSQ] 保存周辺HTML:', label.parentElement.parentElement?.outerHTML.slice(0, 1500));
   }
 
+  // 画面に表示中の末端テキストを一覧にする(診断用)
+  function dumpTexts(tag) {
+    const out = [];
+    for (const el of document.body.querySelectorAll('*')) {
+      if (!visible(el) || el.closest('#' + PANEL_ID) || el.children.length) continue;
+      const t = text(el);
+      if (t && t.length < 40) out.push(t);
+    }
+    console.log('[PSQ] ' + tag + ':', [...new Set(out)].slice(0, 120));
+  }
+
   async function savePin() {
     if (!current.board) { toast('先に保存先のボード名を設定してください', true); return; }
     const dropdown = findDropdownButton();
     if (!dropdown) { debugDump(); toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
 
     dropdown.click();
+    await sleep(500);
+    dumpTexts('プルダウン展開直後');
     const boardEl = await waitFor(() => findByText(document.body, current.board));
     if (!boardEl) { toast('ボード「' + current.board + '」が一覧に見つかりません', true); return; }
     boardEl.click();
+    await sleep(500);
+    dumpTexts('ボードクリック直後');
 
     if (current.section) {
       const sectionEl = await waitFor(() => findByText(document.body, current.section, boardEl));
@@ -131,7 +146,11 @@
     'position:fixed;right:12px;bottom:12px;z-index:2147483646;width:240px;padding:10px;' +
     'background:#fff;color:#111;border:1px solid #ccc;border-radius:10px;font:13px sans-serif;' +
     'box-shadow:0 2px 10px rgba(0,0,0,.2)';
-  document.body.appendChild(panel);
+  document.documentElement.appendChild(panel);
+  // Pinterestが画面を作り直してパネルが消えた場合に付け直す
+  setInterval(() => {
+    if (!panel.isConnected) document.documentElement.appendChild(panel);
+  }, 1000);
 
   function render() {
     panel.innerHTML = '';
