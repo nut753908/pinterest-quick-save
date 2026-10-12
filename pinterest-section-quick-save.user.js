@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.1.2
+// @version      0.1.3
 // @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+S / Shift+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -192,7 +192,7 @@
     }
   }
   render();
-  toast('Pinterest Section Quick Save v0.1.2 起動');
+  toast('Pinterest Section Quick Save v0.1.3 起動');
 
   document.addEventListener('mousemove', (e) => {
     if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastHover = e.target;
@@ -202,7 +202,7 @@
   window.addEventListener('keydown', (e) => {
     const t = e.target;
     const typing = t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
-    if (e.altKey && e.key !== 'Alt') toast('診断: key=' + e.key + ' code=' + e.code); // 診断用
+    toast('診断: key=' + e.key + ' code=' + e.code + ' alt=' + e.altKey + ' shift=' + e.shiftKey); // 診断用(全キー)
     const altS = e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS';
     const shiftS = !typing && e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS';
     if (altS || shiftS) {
