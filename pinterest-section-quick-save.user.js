@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.1.5
+// @version      0.1.6
 // @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+クリック / Alt+S / Shift+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -119,13 +119,26 @@
     return true;
   }
 
+  // 保存先ピッカー(見出しを含む最小の祖先)の中だけから探す。ピン上のボタンの文字を拾わないため
+  function findInPicker(headerLabels, label) {
+    for (const h of headerLabels) {
+      const header = findByText(document.body, h);
+      if (!header) continue;
+      for (let el = header.parentElement; el; el = el.parentElement) {
+        const hit = findByText(el, label, header);
+        if (hit) return hit;
+      }
+    }
+    return null;
+  }
+
   async function savePin() {
     if (!current.board) { toast('先に保存先のボード名を設定してください', true); return; }
     const dropdown = findDropdownButton();
     if (!dropdown) { debugDump(); toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
 
     dropdown.click();
-    const boardEl = await waitFor(() => findByText(document.body, current.board));
+    const boardEl = await waitFor(() => findInPicker(['保存する'], current.board));
     if (!boardEl) { dumpTexts('ボード未検出'); toast('ボード「' + current.board + '」が一覧に見つかりません', true); return; }
 
     if (!current.section) {
@@ -134,11 +147,7 @@
       if (!openSubboards(boardEl)) { toast('ボード行の矢印を押せませんでした', true); return; }
       const header = await waitFor(() => findByText(document.body, 'サブボード'));
       if (!header) { dumpTexts('サブボード画面未検出'); toast('サブボードの画面が開きませんでした(このボードにはサブボードがない可能性)', true); return; }
-      let sectionEl = null;
-      for (let el = header; el && !sectionEl; el = el.parentElement) {
-        const hit = findByText(el, current.section);
-        if (hit && hit !== header) sectionEl = hit;
-      }
+      const sectionEl = findInPicker(['サブボード'], current.section);
       if (!sectionEl) { dumpTexts('サブボード画面'); toast('サブボード「' + current.section + '」が見つかりません', true); return; }
       sectionEl.click();
     }
@@ -211,7 +220,7 @@
     }
   }
   render();
-  toast('Pinterest Section Quick Save v0.1.5 起動');
+  toast('Pinterest Section Quick Save v0.1.6 起動');
 
   document.addEventListener('mousemove', (e) => {
     if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastHover = e.target;
