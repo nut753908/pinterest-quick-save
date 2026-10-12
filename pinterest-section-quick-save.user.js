@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.3.3
+// @version      0.3.4
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選べる)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.3.3'; // @version と合わせる
+  const VERSION = '0.3.4'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -221,9 +221,20 @@
 
   function refreshCatalogUI() {
     if (!boardDl) return;
+    // 中身が変わらないときは作り直さない(候補一覧が開いている最中に差し替えると閉じてしまうため)
     const opt = (v) => Object.assign(document.createElement('option'), { value: v });
-    boardDl.replaceChildren(...catalog.boards.map(opt));
-    sectionDl.replaceChildren(...(catalog.sections[boardInput.value.trim()] || []).map(opt));
+    const setOptions = (dl, values) => {
+      const key = JSON.stringify(values);
+      if (dl.dataset.key === key) return;
+      dl.dataset.key = key;
+      dl.replaceChildren(...values.map(opt));
+    };
+    setOptions(boardDl, catalog.boards);
+    setOptions(sectionDl, catalog.sections[boardInput.value.trim()] || []);
+
+    const manageKey = JSON.stringify(catalog);
+    if (manageList.dataset.key === manageKey) return;
+    manageList.dataset.key = manageKey;
 
     const rowCss = 'display:flex;align-items:center;justify-content:space-between;margin-top:1px';
     const xCss = 'border:0;background:none;cursor:pointer;color:#c00';
