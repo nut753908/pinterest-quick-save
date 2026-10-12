@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.2.3
+// @version      0.2.4
 // @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.2.3'; // @version と合わせる
+  const VERSION = '0.2.4'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -138,10 +138,24 @@
     return null;
   }
 
+  // 診断用: ホバー中のピン付近のボタン情報をコンソールに出す
+  function dumpButtons() {
+    const rows = [];
+    for (let el = lastHover, d = 0; el && d < 10; el = el.parentElement, d++) {
+      for (const b of el.querySelectorAll('button,[role=button],a,[aria-haspopup]')) {
+        if (!visible(b) || b.closest('#' + PANEL_ID)) continue;
+        rows.push(b.tagName + ' | test-id=' + (b.dataset.testId || '') + ' | aria-label=' + (b.getAttribute('aria-label') || '') + ' | text=' + text(b).slice(0, 30));
+      }
+      if (rows.length) break;
+    }
+    console.log('[PSQ] ボタン一覧(' + rows.length + ')\n' + [...new Set(rows)].join('\n'));
+    console.log('[PSQ] lastHover:', lastHover);
+  }
+
   async function savePin() {
     if (!current.board) { toast('先に保存先のボード名を設定してください', true); return; }
     const dropdown = findDropdownButton();
-    if (!dropdown) { toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
+    if (!dropdown) { dumpButtons(); toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
 
     if (dropdown.getAttribute('aria-expanded') !== 'true') dropdown.click(); // 開いたままなら閉じてしまうので押さない
     const boardEl = await waitFor(() => findInPicker(['保存する'], current.board));
