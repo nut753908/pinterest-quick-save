@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.1.10
-// @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+クリック / Alt+S / Shift+Sまたはボタンで1ピンずつ保存する。外部通信なし。
+// @version      0.2.0
+// @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.1.10'; // @version と合わせる
+  const VERSION = '0.2.0'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -87,24 +87,6 @@
     return null;
   }
 
-  function debugDump() {
-    const label = findSaveLabel();
-    console.log('[PSQ] lastHover:', lastHover);
-    console.log('[PSQ] 保存ラベル:', label, label && label.outerHTML.slice(0, 300));
-    if (label) console.log('[PSQ] 保存周辺HTML:', label.parentElement.parentElement?.outerHTML.slice(0, 1500));
-  }
-
-  // 画面に表示中の末端テキストを一覧にする(診断用)
-  function dumpTexts(tag) {
-    const out = [];
-    for (const el of document.body.querySelectorAll('*')) {
-      if (!visible(el) || el.closest('#' + PANEL_ID) || el.children.length) continue;
-      const t = text(el);
-      if (t && t.length < 40) out.push(t);
-    }
-    console.log('[PSQ] ' + tag + ':', [...new Set(out)].slice(0, 120));
-  }
-
   // ボード名の行の右端(「＞」矢印)をクリックして、サブボードの画面へ進む
   function openSubboards(nameEl) {
     let row = nameEl;
@@ -116,7 +98,6 @@
     const r = row.getBoundingClientRect();
     const target = document.elementFromPoint(r.right - 24, r.top + r.height / 2);
     if (!target) return false;
-    toast('進行: 矢印をクリック(' + target.tagName + ')');
     realClick(target);
     return true;
   }
@@ -148,28 +129,23 @@
   async function savePin() {
     if (!current.board) { toast('先に保存先のボード名を設定してください', true); return; }
     const dropdown = findDropdownButton();
-    if (!dropdown) { debugDump(); toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
+    if (!dropdown) { toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
 
     if (dropdown.getAttribute('aria-expanded') !== 'true') dropdown.click(); // 開いたままなら閉じてしまうので押さない
-    toast('進行: プルダウンを開きました');
     const boardEl = await waitFor(() => findInPicker(['保存する'], current.board));
-    if (!boardEl) { dumpTexts('ボード未検出'); toast('ボード「' + current.board + '」が一覧に見つかりません', true); return; }
+    if (!boardEl) { toast('ボード「' + current.board + '」が一覧に見つかりません', true); return; }
 
     if (!current.section) {
-      toast('進行: ボード行をクリック');
       realClick(boardEl); // セクション指定なし: ボード行のクリックで保存
     } else {
       if (!openSubboards(boardEl)) { toast('ボード行の矢印を押せませんでした', true); return; }
       const header = await waitFor(() => findByText(document.body, 'サブボード'));
-      if (!header) { dumpTexts('サブボード画面未検出'); toast('サブボードの画面が開きませんでした(このボードにはサブボードがない可能性)', true); return; }
-      toast('進行: サブボード画面を確認');
+      if (!header) { toast('サブボードの画面が開きませんでした(このボードにはサブボードがない可能性)', true); return; }
       const sectionEl = findInPicker(['サブボード'], current.section);
-      if (!sectionEl) { dumpTexts('サブボード画面'); toast('サブボード「' + current.section + '」が見つかりません', true); return; }
-      toast('進行: サブボード「' + current.section + '」をクリック');
+      if (!sectionEl) { toast('サブボード「' + current.section + '」が見つかりません', true); return; }
       realClick(sectionEl);
     }
-    toast('クリックしました: ' + current.board + (current.section ? ' / ' + current.section : '') +
-      '(保存先は通知で確認してください)');
+    toast('保存操作を実行しました: ' + current.board + (current.section ? ' / ' + current.section : ''));
   }
 
   function setCurrent(board, section) {
@@ -208,7 +184,7 @@
     const inputCss = 'width:100%;box-sizing:border-box;margin:2px 0;padding:4px;border:1px solid #bbb;border-radius:4px';
     const btnCss = 'padding:5px 8px;border:0;border-radius:6px;background:#e60023;color:#fff;cursor:pointer';
 
-    panel.appendChild(el('div', { textContent: '現在の保存先' }, 'font-weight:bold;margin-bottom:4px'));
+    panel.appendChild(el('div', { textContent: '現在の保存先 (v' + VERSION + ')' }, 'font-weight:bold;margin-bottom:4px'));
     const board = el('input', { placeholder: 'ボード名', value: current.board }, inputCss);
     const section = el('input', { placeholder: 'セクション名(省略可)', value: current.section }, inputCss);
     panel.append(board, section);
@@ -237,47 +213,16 @@
     }
   }
   render();
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => toast('Pinterest Section Quick Save v' + VERSION + ' 起動'));
-  } else {
-    toast('Pinterest Section Quick Save v' + VERSION + ' 起動');
-  }
-
   document.addEventListener('mousemove', (e) => {
     if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastHover = e.target;
   }, { passive: true });
 
-  // Pinterest側に止められないよう、キャプチャ段階で受け取る(window/documentの両方、重複は排除)
-  let lastKeyStamp = -1;
-  const onKey = (e) => {
-    console.log('[PSQ] keydown', e.key, e.code, 'alt=' + e.altKey, 'target=', e.target && e.target.tagName, 'listener=', e.currentTarget === window ? 'window' : 'document');
-    if (e.timeStamp === lastKeyStamp) return;
-    lastKeyStamp = e.timeStamp;
-    const t = e.target;
-    const typing = t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
-    const altS = e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS';
-    const shiftS = !typing && e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS';
-    if (altS || shiftS) {
-      toast('ホットキーを受け取りました');
+  // Pinterest側より先に受け取るため、キャプチャ段階で登録する
+  document.addEventListener('keydown', (e) => {
+    if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && e.code === 'KeyS') {
       e.preventDefault();
       e.stopImmediatePropagation();
       savePin();
     }
-  };
-  for (const target of [window, document]) {
-    target.addEventListener('keydown', onKey, true);
-  }
-
-  console.log('[PSQ] リスナー登録完了 readyState=' + document.readyState);
-
-  // キーボードに頼らない方法: Altを押しながらピンをクリックで保存
-  window.addEventListener('click', (e) => {
-    console.log('[PSQ] click alt=' + e.altKey, e.target);
-    if (!e.altKey || e.target.closest('#' + PANEL_ID)) return;
-    lastHover = e.target;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    toast('Alt+クリックを受け取りました');
-    savePin();
   }, true);
 })();
