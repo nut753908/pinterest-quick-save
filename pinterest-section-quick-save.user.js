@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.1.4
+// @version      0.1.5
 // @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+クリック / Alt+S / Shift+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -104,23 +104,42 @@
     console.log('[PSQ] ' + tag + ':', [...new Set(out)].slice(0, 120));
   }
 
+  // ボード名の行の右端(「＞」矢印)をクリックして、サブボードの画面へ進む
+  function openSubboards(nameEl) {
+    let row = nameEl;
+    for (let i = 0; i < 8 && row.parentElement; i++) {
+      const r = row.getBoundingClientRect();
+      if (r.width > 200 && r.height > 30 && r.height < 120) break;
+      row = row.parentElement;
+    }
+    const r = row.getBoundingClientRect();
+    const target = document.elementFromPoint(r.right - 24, r.top + r.height / 2);
+    if (!target) return false;
+    target.click();
+    return true;
+  }
+
   async function savePin() {
     if (!current.board) { toast('先に保存先のボード名を設定してください', true); return; }
     const dropdown = findDropdownButton();
     if (!dropdown) { debugDump(); toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
 
     dropdown.click();
-    await sleep(500);
-    dumpTexts('プルダウン展開直後');
     const boardEl = await waitFor(() => findByText(document.body, current.board));
-    if (!boardEl) { toast('ボード「' + current.board + '」が一覧に見つかりません', true); return; }
-    boardEl.click();
-    await sleep(500);
-    dumpTexts('ボードクリック直後');
+    if (!boardEl) { dumpTexts('ボード未検出'); toast('ボード「' + current.board + '」が一覧に見つかりません', true); return; }
 
-    if (current.section) {
-      const sectionEl = await waitFor(() => findByText(document.body, current.section, boardEl));
-      if (!sectionEl) { toast('セクション「' + current.section + '」が見つかりません', true); return; }
+    if (!current.section) {
+      boardEl.click(); // セクション指定なし: ボード行のクリックで保存
+    } else {
+      if (!openSubboards(boardEl)) { toast('ボード行の矢印を押せませんでした', true); return; }
+      const header = await waitFor(() => findByText(document.body, 'サブボード'));
+      if (!header) { dumpTexts('サブボード画面未検出'); toast('サブボードの画面が開きませんでした(このボードにはサブボードがない可能性)', true); return; }
+      let sectionEl = null;
+      for (let el = header; el && !sectionEl; el = el.parentElement) {
+        const hit = findByText(el, current.section);
+        if (hit && hit !== header) sectionEl = hit;
+      }
+      if (!sectionEl) { dumpTexts('サブボード画面'); toast('サブボード「' + current.section + '」が見つかりません', true); return; }
       sectionEl.click();
     }
     toast('クリックしました: ' + current.board + (current.section ? ' / ' + current.section : '') +
@@ -192,7 +211,7 @@
     }
   }
   render();
-  toast('Pinterest Section Quick Save v0.1.4 起動');
+  toast('Pinterest Section Quick Save v0.1.5 起動');
 
   document.addEventListener('mousemove', (e) => {
     if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastHover = e.target;
@@ -201,10 +220,8 @@
   // Pinterest側に止められないよう、キャプチャ段階で受け取る(window/documentの両方、重複は排除)
   let lastKeyStamp = -1;
   const onKey = (e) => {
-    if (e.type === 'keydown' && e.timeStamp === lastKeyStamp) return;
-    if (e.type === 'keydown') lastKeyStamp = e.timeStamp;
-    toast('診断: ' + e.type + ' key=' + e.key + ' code=' + e.code + ' alt=' + e.altKey + ' shift=' + e.shiftKey); // 診断用(全キー)
-    if (e.type !== 'keydown') return;
+    if (e.timeStamp === lastKeyStamp) return;
+    lastKeyStamp = e.timeStamp;
     const t = e.target;
     const typing = t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable);
     const altS = e.altKey && !e.ctrlKey && !e.metaKey && e.code === 'KeyS';
@@ -218,7 +235,6 @@
   };
   for (const target of [window, document]) {
     target.addEventListener('keydown', onKey, true);
-    target.addEventListener('keyup', onKey, true);
   }
 
   // キーボードに頼らない方法: Altを押しながらピンをクリックで保存
