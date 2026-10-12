@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Pinterest Section Quick Save
+// @name         Pinterest Quick Save
 // @namespace    local.pinterest.quicksave
 // @version      0.8.2
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、S キー(1キー)またはボタンで1ピンずつ保存する(保存済みのピンでは保存を解除する)。外部通信なし。
