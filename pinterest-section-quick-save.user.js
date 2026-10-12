@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.3.0
+// @version      0.3.1
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選べる)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.3.0'; // @version と合わせる
+  const VERSION = '0.3.1'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -157,11 +157,12 @@
   // ボード一覧が全件表示されているときだけ、記憶している候補を画面の内容で置き換える
   function scanBoards(header, footer) {
     const root = ancestorContaining(header, footer);
-    if (!root) return;
+    if (!root) { console.log('[PSQ] scan: 共通の祖先なし'); return; }
     const input = root.querySelector('input');
-    if (input && input.value) return; // 絞り込み中は全件ではない
+    if (input && input.value) { console.log('[PSQ] scan: 絞り込み中'); return; } // 絞り込み中は全件ではない
     const names = [...new Set(titledNames(root).map((t) => t.name))].filter((n) => n !== 'プロフィール');
     const m = text(root).match(/(\d+)\s*件のボード/);
+    console.log('[PSQ] scan: 名前=' + names.length + '件', names, '件数表示=', m && m[1], 'title付き要素=', root.querySelectorAll('[title]').length);
     if (!m) return;
     const n = Number(m[1]);
     if (names.length !== n && names.length + 1 !== n) return; // 件数が合わなければ全件ではない
@@ -192,12 +193,13 @@
 
   function scanPicker() {
     // 保存先の一覧が開いているときだけ調べる(通常時の負荷を避ける)
-    if (!document.querySelector('[data-test-id="PinBetterSaveDropdown"][aria-expanded="true"]')) return;
+    if (!document.querySelector('[data-test-id="PinBetterSaveDropdown"][aria-expanded="true"]')) { console.log('[PSQ] scan: 一覧が開いていない扱い'); return; }
     const subHeader = findByText(document.body, 'サブボード');
     const subFooter = findByText(document.body, 'サブボードを作成する');
     if (subHeader && subFooter) { scanSubboards(subHeader, subFooter); return; }
     const header = findByText(document.body, '保存する');
     const footer = findByText(document.body, '新規ボードを作成する');
+    console.log('[PSQ] scan: header=' + !!header + ' footer=' + !!footer);
     if (header && footer) scanBoards(header, footer);
   }
 
