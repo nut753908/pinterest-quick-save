@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.4.0
-// @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選べる)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
+// @version      0.5.0
+// @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.4.0'; // @version と合わせる
+  const VERSION = '0.5.0'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -256,7 +256,7 @@
   }
 
   async function savePin() {
-    if (!current.board) { toast('先に保存先のボード名を設定してください', true); return; }
+    if (!current.board) { toast('先に保存先のボードを選択してください', true); return; }
     const dropdown = findDropdownButton();
     if (!dropdown && findByTestId('saved-button')) {
       // 「保存済み」ボタンは押すと保存が削除されるため、何もしない
@@ -329,44 +329,60 @@
       if (css) e.style.cssText = css;
       return e;
     };
-    const inputCss = 'width:100%;box-sizing:border-box;margin:2px 0;padding:4px;border:1px solid #bbb;border-radius:4px';
     const btnCss = 'padding:5px 8px;border:0;border-radius:6px;background:#e60023;color:#fff;cursor:pointer';
 
     panel.appendChild(el('div', { textContent: '現在の保存先 (v' + VERSION + ')' }, 'font-weight:bold;margin-bottom:4px'));
-    // 入力欄 + ▼ボタン。▼で全候補の一覧を開き、選ぶと入力欄に入る(入力欄の中身は空にしない)
-    const combo = (placeholder, value, getOptions, emptyMsg) => {
-      const wrap = el('div', {}, 'position:relative;display:flex;gap:3px;align-items:center');
-      const input = el('input', { placeholder, value }, inputCss + ';flex:1;width:auto');
-      const toggle = el('button', { textContent: '▼', title: '候補から選ぶ' },
-        'border:1px solid #bbb;border-radius:4px;background:#f6f6f6;cursor:pointer;padding:4px 6px');
+    // 選択専用の欄。クリックで全候補の一覧を開き、選ぶと欄に表示される(文字は入力しない)
+    const combo = (placeholder, value, getOptions, emptyMsg, clearLabel, onPick) => {
+      const state = { value };
+      const wrap = el('div', {}, 'position:relative;margin:2px 0');
+      const btn = el('button', { type: 'button' },
+        'width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid #bbb;border-radius:4px;' +
+        'background:#fff;cursor:pointer;text-align:left;display:flex;justify-content:space-between;gap:6px');
+      const label = el('span', {}, 'overflow:hidden;white-space:nowrap;text-overflow:ellipsis');
+      btn.append(label, el('span', { textContent: '▼' }, 'color:#666'));
+      const show = () => {
+        label.textContent = state.value || placeholder;
+        label.style.color = state.value ? '#111' : '#888';
+      };
+      show();
       const menu = el('div', {},
         'display:none;position:absolute;left:0;right:0;bottom:100%;max-height:180px;overflow:auto;' +
         'background:#fff;border:1px solid #bbb;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:1');
       menu.dataset.psqMenu = '1';
-      toggle.onclick = () => {
+      const pick = (v) => {
+        const changed = v !== state.value;
+        state.value = v;
+        menu.style.display = 'none';
+        show();
+        if (changed && onPick) onPick();
+      };
+      const item = (text, v, color) => {
+        const it = el('div', { textContent: text },
+          'padding:5px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:' + (color || '#111'));
+        it.onmouseenter = () => { it.style.background = '#eee'; };
+        it.onmouseleave = () => { it.style.background = ''; };
+        it.onclick = () => pick(v);
+        return it;
+      };
+      btn.onclick = () => {
         if (menu.style.display !== 'none') { menu.style.display = 'none'; return; }
         const opts = getOptions();
-        menu.replaceChildren(...(opts.length
-          ? opts.map((o) => {
-              const item = el('div', { textContent: o },
-                'padding:5px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis');
-              item.onmouseenter = () => { item.style.background = '#eee'; };
-              item.onmouseleave = () => { item.style.background = ''; };
-              item.onclick = () => { input.value = o; menu.style.display = 'none'; };
-              return item;
-            })
-          : [el('div', { textContent: emptyMsg }, 'padding:5px 8px;color:#888')]));
+        const items = opts.map((o) => item(o, o));
+        if (clearLabel) items.unshift(item(clearLabel, '', '#888'));
+        menu.replaceChildren(...(items.length ? items : [el('div', { textContent: emptyMsg }, 'padding:5px 8px;color:#888')]));
         menu.style.display = 'block';
       };
-      wrap.append(input, toggle, menu);
-      return { wrap, input };
+      wrap.append(btn, menu);
+      return { wrap, state, show };
     };
-    const boardCombo = combo('ボード名', current.board, () => catalog.boards,
-      '候補なし(保存先の一覧を一度開くと取り込まれます)');
-    const board = boardCombo.input;
-    const sectionCombo = combo('セクション名(省略可)', current.section,
-      () => catalog.sections[board.value.trim()] || [], '候補なし');
-    const section = sectionCombo.input;
+    const sectionCombo = combo('セクション(指定なし)', current.section,
+      () => catalog.sections[board.value.trim()] || [], '候補なし', '(指定なし)');
+    const boardCombo = combo('ボードを選択', current.board, () => catalog.boards,
+      '候補なし(保存先の一覧を一度開くと取り込まれます)', '',
+      () => { sectionCombo.state.value = ''; sectionCombo.show(); }); // ボードを変えたらセクションは選び直す
+    const board = boardCombo.state;
+    const section = sectionCombo.state;
     panel.append(boardCombo.wrap, sectionCombo.wrap);
 
     const row = el('div', {}, 'display:flex;gap:6px;margin-top:4px');
