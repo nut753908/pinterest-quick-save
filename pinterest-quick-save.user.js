@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pinterest Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.8.2
-// @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、S キー(1キー)またはボタンで1ピンずつ保存する(保存済みのピンでは保存を解除する)。外部通信なし。
+// @version      0.9.0
+// @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、S キー(1キー)で、マウスを乗せたピンを1つずつ保存する(保存済みのピンでは保存を解除する)。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.8.2'; // @version と合わせる
+  const VERSION = '0.9.0'; // @version と合わせる
   const HOTKEY = 'KeyS'; // 保存キー(修飾キーなしの1キー)。変えるときはKeyAなどのcodeを指定する
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -279,18 +279,17 @@
     manageList.replaceChildren(...rows, clear);
   }
 
-  // quiet: キー操作用。ピンにマウスが乗っていないときは、通知を出さず何もしない
-  async function savePin(quiet) {
+  // ピンにマウスが乗っていないときは、通知を出さず何もしない
+  async function savePin() {
     const dropdown = findDropdownButton();
     const saved = !dropdown && findByTestId('saved-button');
-    if (quiet && !dropdown && !saved) return;
+    if (!dropdown && !saved) return;
     if (saved) {
       // 保存済みのピン: 「保存済み」ボタンを押すと保存が削除される(トグル)
       realClick(saved);
       return;
     }
     if (!current.board) { toast('先に保存先のボードを選択してください', true); return; }
-    if (!dropdown) { toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
 
     pushHistory();
     if (dropdown.getAttribute('aria-expanded') !== 'true') dropdown.click(); // 開いたままなら閉じてしまうので押さない
@@ -367,7 +366,6 @@
       if (css) e.style.cssText = css;
       return e;
     };
-    const btnCss = 'padding:5px 8px;border:0;border-radius:6px;background:#e60023;color:#fff;cursor:pointer';
 
     panel.appendChild(el('div', { textContent: '現在の保存先 (v' + VERSION + ')' }, 'font-weight:bold;margin-bottom:4px'));
     // 選択専用の欄。クリックで全候補の一覧を開き、選ぶと欄に表示される(文字は入力しない)
@@ -428,13 +426,6 @@
     const section = sectionCombo.state;
     panel.append(boardCombo.wrap, sectionCombo.wrap);
 
-    const row = el('div', {}, 'display:flex;gap:6px;margin-top:4px');
-    const saveBtn = el('button', { textContent: '保存/解除 (S)' }, btnCss + ';flex:1');
-    saveBtn.onmousedown = (e) => e.preventDefault(); // ホバー状態を保つ
-    saveBtn.onclick = () => savePin();
-    row.append(saveBtn);
-    panel.appendChild(row);
-
     const details = el('details', {}, 'margin-top:8px');
     details.appendChild(el('summary', { textContent: '候補の管理' }, 'cursor:pointer;color:#666'));
     manageList = el('div', {}, 'max-height:160px;overflow:auto;margin-top:4px');
@@ -476,6 +467,6 @@
     if (!findDropdownButton() && !findByTestId('saved-button')) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    savePin(true);
+    savePin();
   }, true);
 })();
