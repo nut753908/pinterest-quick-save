@@ -60,31 +60,43 @@
     setTimeout(() => el.remove(), 3500);
   }
 
-  function pinContainer() {
-    const hovered = lastHover && lastHover.closest(
-      '[data-test-id="pin"],[data-test-id="pinWrapper"],[data-test-id="closeup-body"],[data-grid-item]'
-    );
-    return hovered || document.querySelector('[data-test-id="closeup-body"]') || document.body;
+  const CLICKABLE = 'button,[role=button],a,[aria-haspopup]';
+
+  // ホバー中の要素から親をたどり、「保存」ラベルを含む最も近い祖先内で探す
+  function findSaveLabel() {
+    for (let el = lastHover; el && el !== document.documentElement; el = el.parentElement) {
+      const hit = findByText(el, '保存');
+      if (hit) return hit;
+    }
+    return findByText(document.body, '保存');
   }
 
-  function findDropdownButton(container) {
-    const saveBtn = [...container.querySelectorAll('button,[role=button]')]
-      .find((b) => visible(b) && text(b) === '保存' && !b.closest('#' + PANEL_ID));
-    if (!saveBtn) return null;
-    let sib = saveBtn.previousElementSibling;
-    while (sib) {
-      const b = sib.matches('button,[role=button]') ? sib : sib.querySelector('button,[role=button]');
-      if (b) return b;
-      sib = sib.previousElementSibling;
+  function findDropdownButton() {
+    const label = findSaveLabel();
+    if (!label) return null;
+    const saveBtn = label.closest(CLICKABLE) || label;
+    let node = saveBtn;
+    for (let i = 0; i < 4 && node.parentElement; i++) {
+      const parent = node.parentElement;
+      const cand = [...parent.querySelectorAll(CLICKABLE)].find((b) =>
+        visible(b) && !saveBtn.contains(b) && !b.contains(saveBtn) && !b.closest('#' + PANEL_ID));
+      if (cand) return cand;
+      node = parent;
     }
-    const parent = saveBtn.parentElement;
-    return [...parent.querySelectorAll('button,[role=button]')].find((b) => b !== saveBtn) || null;
+    return null;
+  }
+
+  function debugDump() {
+    const label = findSaveLabel();
+    console.log('[PSQ] lastHover:', lastHover);
+    console.log('[PSQ] 保存ラベル:', label, label && label.outerHTML.slice(0, 300));
+    if (label) console.log('[PSQ] 保存周辺HTML:', label.parentElement.parentElement?.outerHTML.slice(0, 1500));
   }
 
   async function savePin() {
     if (!current.board) { toast('先に保存先のボード名を設定してください', true); return; }
-    const dropdown = findDropdownButton(pinContainer());
-    if (!dropdown) { toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
+    const dropdown = findDropdownButton();
+    if (!dropdown) { debugDump(); toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
 
     dropdown.click();
     const boardEl = await waitFor(() => findByText(document.body, current.board));
