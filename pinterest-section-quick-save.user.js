@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.3.6
+// @version      0.4.0
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選べる)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.3.6'; // @version と合わせる
+  const VERSION = '0.4.0'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -140,7 +140,7 @@
 
   // ---- 候補(ボード/セクション)の記憶 ----
   let catalog = load('catalog', { boards: [], sections: {} });
-  let boardInput = null, boardDl = null, sectionDl = null, manageList = null;
+  let manageList = null;
   const saveCatalog = () => { store('catalog', catalog); refreshCatalogUI(); };
 
   function titledNames(root) {
@@ -219,19 +219,9 @@
     saveCatalog();
   }
 
+  // 「候補の管理」の一覧を更新する(入力欄の候補は、▼を押したときにその都度作る)
   function refreshCatalogUI() {
-    if (!boardDl) return;
-    // 中身が変わらないときは作り直さない(候補一覧が開いている最中に差し替えると閉じてしまうため)
-    const opt = (v) => Object.assign(document.createElement('option'), { value: v });
-    const setOptions = (dl, values) => {
-      const key = JSON.stringify(values);
-      if (dl.dataset.key === key) return;
-      dl.dataset.key = key;
-      dl.replaceChildren(...values.map(opt));
-    };
-    setOptions(boardDl, catalog.boards);
-    setOptions(sectionDl, catalog.sections[boardInput.value.trim()] || []);
-
+    if (!manageList) return;
     const manageKey = JSON.stringify(catalog);
     if (manageList.dataset.key === manageKey) return;
     manageList.dataset.key = manageKey;
@@ -343,35 +333,41 @@
     const btnCss = 'padding:5px 8px;border:0;border-radius:6px;background:#e60023;color:#fff;cursor:pointer';
 
     panel.appendChild(el('div', { textContent: '現在の保存先 (v' + VERSION + ')' }, 'font-weight:bold;margin-bottom:4px'));
-    const board = el('input', { placeholder: 'ボード名', value: current.board }, inputCss);
-    const section = el('input', { placeholder: 'セクション名(省略可)', value: current.section }, inputCss);
-    panel.append(board, section);
-
-    // 入力欄は、クリックで中身を空にして全候補を出し、何も選ばず離れたら元に戻す
-    boardInput = board;
-    boardDl = el('datalist', { id: 'psq-boards' });
-    sectionDl = el('datalist', { id: 'psq-sections' });
-    board.setAttribute('list', 'psq-boards');
-    section.setAttribute('list', 'psq-sections');
-    for (const inp of [board, section]) {
-      let prev = '';
-      // フォーカス時だけでなくクリック時も空にする(選択後はフォーカスが残るため、空にしないと選んだ候補しか出ない)
-      // 空にするだけで、候補一覧(datalist)には触れない(表示中の一覧が閉じてしまうため)
-      const clearForList = () => {
-        if (!inp.value) return;
-        prev = inp.value;
-        inp.value = '';
+    // 入力欄 + ▼ボタン。▼で全候補の一覧を開き、選ぶと入力欄に入る(入力欄の中身は空にしない)
+    const combo = (placeholder, value, getOptions, emptyMsg) => {
+      const wrap = el('div', {}, 'position:relative;display:flex;gap:3px;align-items:center');
+      const input = el('input', { placeholder, value }, inputCss + ';flex:1;width:auto');
+      const toggle = el('button', { textContent: '▼', title: '候補から選ぶ' },
+        'border:1px solid #bbb;border-radius:4px;background:#f6f6f6;cursor:pointer;padding:4px 6px');
+      const menu = el('div', {},
+        'display:none;position:absolute;left:0;right:0;bottom:100%;max-height:180px;overflow:auto;' +
+        'background:#fff;border:1px solid #bbb;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:1');
+      menu.dataset.psqMenu = '1';
+      toggle.onclick = () => {
+        if (menu.style.display !== 'none') { menu.style.display = 'none'; return; }
+        const opts = getOptions();
+        menu.replaceChildren(...(opts.length
+          ? opts.map((o) => {
+              const item = el('div', { textContent: o },
+                'padding:5px 8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis');
+              item.onmouseenter = () => { item.style.background = '#eee'; };
+              item.onmouseleave = () => { item.style.background = ''; };
+              item.onclick = () => { input.value = o; menu.style.display = 'none'; };
+              return item;
+            })
+          : [el('div', { textContent: emptyMsg }, 'padding:5px 8px;color:#888')]));
+        menu.style.display = 'block';
       };
-      inp.addEventListener('focus', clearForList);
-      inp.addEventListener('mousedown', clearForList);
-      inp.addEventListener('blur', () => {
-        if (inp.value) return;
-        inp.value = prev; // 何も選ばずに離れたら元に戻す
-        refreshCatalogUI();
-      });
-      inp.addEventListener('input', refreshCatalogUI);
-    }
-    panel.append(boardDl, sectionDl);
+      wrap.append(input, toggle, menu);
+      return { wrap, input };
+    };
+    const boardCombo = combo('ボード名', current.board, () => catalog.boards,
+      '候補なし(保存先の一覧を一度開くと取り込まれます)');
+    const board = boardCombo.input;
+    const sectionCombo = combo('セクション名(省略可)', current.section,
+      () => catalog.sections[board.value.trim()] || [], '候補なし');
+    const section = sectionCombo.input;
+    panel.append(boardCombo.wrap, sectionCombo.wrap);
 
     const row = el('div', {}, 'display:flex;gap:6px;margin-top:4px');
     const setBtn = el('button', { textContent: '設定' }, btnCss + ';background:#555');
@@ -404,6 +400,12 @@
     }
   }
   render();
+  // 候補一覧の外側をクリックしたら閉じる
+  document.addEventListener('mousedown', (e) => {
+    for (const m of panel.querySelectorAll('[data-psq-menu]')) {
+      if (!m.parentElement.contains(e.target)) m.style.display = 'none';
+    }
+  }, true);
   document.addEventListener('mousemove', (e) => {
     if (!e.target.closest || !e.target.closest('#' + PANEL_ID)) lastHover = e.target;
   }, { passive: true });
