@@ -426,7 +426,7 @@
     const section = sectionCombo.state;
     panel.append(boardCombo.wrap, sectionCombo.wrap);
 
-    panel.appendChild(el('div', { textContent: 'S キー: マウスを乗せたピンを保存 / 保存済みなら解除' },
+    panel.appendChild(el('div', { textContent: 'S キー: 保存 / 解除' },
       'margin-top:6px;color:#666;font-size:12px'));
 
     const details = el('details', {}, 'margin-top:8px');
