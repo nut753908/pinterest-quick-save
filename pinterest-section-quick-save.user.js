@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.7.0
+// @version      0.8.0
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選ぶ)をパネルで設定し、S キー(1キー)またはボタンで1ピンずつ保存する(保存済みのピンでは保存を解除する)。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.7.0'; // @version と合わせる
+  const VERSION = '0.8.0'; // @version と合わせる
   const HOTKEY = 'KeyS'; // 保存キー(修飾キーなしの1キー)。変えるときはKeyAなどのcodeを指定する
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -269,6 +269,7 @@
     if (!current.board) { toast('先に保存先のボードを選択してください', true); return; }
     if (!dropdown) { toast('保存ボタンが見つかりません(ピンにマウスを乗せてください)', true); return; }
 
+    pushHistory();
     if (dropdown.getAttribute('aria-expanded') !== 'true') dropdown.click(); // 開いたままなら閉じてしまうので押さない
     const boardEl = await waitFor(() => findInPicker(['保存する'], current.board));
     if (!boardEl) {
@@ -300,15 +301,25 @@
     }
   }
 
-  function setCurrent(board, section) {
+  // 選んだ時点で保存先として反映する(画面は作り直さない)
+  function applySelection(board, section) {
     current = { board: board.trim(), section: section.trim() };
     store('current', current);
-    if (current.board) {
-      history = history.filter((h) => !(h.board === current.board && h.section === current.section));
-      history.unshift({ ...current });
-      history = history.slice(0, 20);
-      store('history', history);
-    }
+  }
+
+  // 実際に保存したときだけ履歴に残す(選択の途中の組み合わせで履歴が埋まらないように)
+  function pushHistory() {
+    if (!current.board) return;
+    history = history.filter((h) => !(h.board === current.board && h.section === current.section));
+    history.unshift({ ...current });
+    history = history.slice(0, 20);
+    store('history', history);
+    render();
+  }
+
+  // 履歴から選んだとき
+  function setCurrent(board, section) {
+    applySelection(board, section);
     render();
   }
 
@@ -381,21 +392,24 @@
       return { wrap, state, show };
     };
     const sectionCombo = combo('セクション(指定なし)', current.section,
-      () => catalog.sections[board.value.trim()] || [], '候補なし', '(指定なし)');
+      () => catalog.sections[board.value.trim()] || [], '候補なし', '(指定なし)',
+      () => applySelection(boardCombo.state.value, sectionCombo.state.value));
     const boardCombo = combo('ボードを選択', current.board, () => catalog.boards,
       '候補なし(保存先の一覧を一度開くと取り込まれます)', '',
-      () => { sectionCombo.state.value = ''; sectionCombo.show(); }); // ボードを変えたらセクションは選び直す
+      () => { // ボードを変えたらセクションは選び直す
+        sectionCombo.state.value = '';
+        sectionCombo.show();
+        applySelection(boardCombo.state.value, '');
+      });
     const board = boardCombo.state;
     const section = sectionCombo.state;
     panel.append(boardCombo.wrap, sectionCombo.wrap);
 
     const row = el('div', {}, 'display:flex;gap:6px;margin-top:4px');
-    const setBtn = el('button', { textContent: '設定' }, btnCss + ';background:#555');
-    setBtn.onclick = () => setCurrent(board.value, section.value);
     const saveBtn = el('button', { textContent: '保存/解除 (S)' }, btnCss + ';flex:1');
     saveBtn.onmousedown = (e) => e.preventDefault(); // ホバー状態を保つ
-    saveBtn.onclick = () => { setCurrent(board.value, section.value); savePin(); };
-    row.append(setBtn, saveBtn);
+    saveBtn.onclick = () => savePin();
+    row.append(saveBtn);
     panel.appendChild(row);
 
     const details = el('details', {}, 'margin-top:8px');
