@@ -5,6 +5,8 @@ Pinterest のピンを、あらかじめ決めた保存先(ボード/セクシ�
 - 対象サイト: `https://jp.pinterest.com/*`(日本語表示のみ)
 - 外部との通信はありません。設定はユーザースクリプト拡張のストレージに保存されます。
 
+![パネルの画面](images/panel.png)
+
 ## インストール
 
 1. [Tampermonkey](https://www.tampermonkey.net/) などのユーザースクリプト拡張を入れます。
