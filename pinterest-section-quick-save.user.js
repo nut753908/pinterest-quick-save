@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.2.5
-// @description  「今の保存先」(ボード/セクション)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
+// @version      0.3.0
+// @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選べる)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.2.5'; // @version と合わせる
+  const VERSION = '0.3.0'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -138,6 +138,121 @@
     return null;
   }
 
+  // ---- 候補(ボード/セクション)の記憶 ----
+  let catalog = load('catalog', { boards: [], sections: {} });
+  let boardInput = null, boardDl = null, sectionDl = null, manageList = null;
+  const saveCatalog = () => { store('catalog', catalog); refreshCatalogUI(); };
+
+  function titledNames(root) {
+    return [...root.querySelectorAll('[title]')]
+      .filter((el) => visible(el) && text(el) === el.getAttribute('title'))
+      .map((el) => ({ el, name: el.getAttribute('title') }));
+  }
+
+  function ancestorContaining(start, target) {
+    for (let el = start.parentElement; el; el = el.parentElement) if (el.contains(target)) return el;
+    return null;
+  }
+
+  // ボード一覧が全件表示されているときだけ、記憶している候補を画面の内容で置き換える
+  function scanBoards(header, footer) {
+    const root = ancestorContaining(header, footer);
+    if (!root) return;
+    const input = root.querySelector('input');
+    if (input && input.value) return; // 絞り込み中は全件ではない
+    const names = [...new Set(titledNames(root).map((t) => t.name))].filter((n) => n !== 'プロフィール');
+    const m = text(root).match(/(\d+)\s*件のボード/);
+    if (!m) return;
+    const n = Number(m[1]);
+    if (names.length !== n && names.length + 1 !== n) return; // 件数が合わなければ全件ではない
+    if (JSON.stringify(names) === JSON.stringify(catalog.boards)) return;
+    catalog.boards = names;
+    for (const b of Object.keys(catalog.sections)) if (!names.includes(b)) delete catalog.sections[b];
+    saveCatalog();
+  }
+
+  // サブボード画面が表示されたら、そのボードのセクション候補を画面の内容で置き換える
+  function scanSubboards(header, footer) {
+    const root = ancestorContaining(header, footer);
+    if (!root) return;
+    const items = titledNames(root);
+    const before = items.filter((t) => header.compareDocumentPosition(t.el) & 2); // 見出しより前
+    const after = items.filter((t) => header.compareDocumentPosition(t.el) & 4);  // 見出しより後
+    if (!before.length) return;
+    const board = before[before.length - 1].name;
+    const secs = [...new Set(after.map((t) => t.name))];
+    let changed = false;
+    if (!catalog.boards.includes(board)) { catalog.boards.push(board); changed = true; }
+    if (JSON.stringify(catalog.sections[board] || []) !== JSON.stringify(secs)) {
+      if (secs.length) catalog.sections[board] = secs; else delete catalog.sections[board];
+      changed = true;
+    }
+    if (changed) saveCatalog();
+  }
+
+  function scanPicker() {
+    // 保存先の一覧が開いているときだけ調べる(通常時の負荷を避ける)
+    if (!document.querySelector('[data-test-id="PinBetterSaveDropdown"][aria-expanded="true"]')) return;
+    const subHeader = findByText(document.body, 'サブボード');
+    const subFooter = findByText(document.body, 'サブボードを作成する');
+    if (subHeader && subFooter) { scanSubboards(subHeader, subFooter); return; }
+    const header = findByText(document.body, '保存する');
+    const footer = findByText(document.body, '新規ボードを作成する');
+    if (header && footer) scanBoards(header, footer);
+  }
+
+  let scanTimer = 0;
+  new MutationObserver(() => {
+    clearTimeout(scanTimer);
+    scanTimer = setTimeout(scanPicker, 500);
+  }).observe(document.documentElement, { childList: true, subtree: true });
+
+  function removeBoard(name) {
+    catalog.boards = catalog.boards.filter((b) => b !== name);
+    delete catalog.sections[name];
+    saveCatalog();
+  }
+  function removeSection(board, name) {
+    const list = (catalog.sections[board] || []).filter((x) => x !== name);
+    if (list.length) catalog.sections[board] = list; else delete catalog.sections[board];
+    saveCatalog();
+  }
+
+  function refreshCatalogUI() {
+    if (!boardDl) return;
+    const opt = (v) => Object.assign(document.createElement('option'), { value: v });
+    boardDl.replaceChildren(...catalog.boards.map(opt));
+    sectionDl.replaceChildren(...(catalog.sections[boardInput.value.trim()] || []).map(opt));
+
+    const rowCss = 'display:flex;align-items:center;justify-content:space-between;margin-top:1px';
+    const xCss = 'border:0;background:none;cursor:pointer;color:#c00';
+    const rows = [];
+    for (const b of catalog.boards) {
+      const row = document.createElement('div');
+      row.style.cssText = rowCss;
+      const label = Object.assign(document.createElement('span'), { textContent: b });
+      const x = Object.assign(document.createElement('button'), { textContent: '×', title: 'この候補を削除' });
+      x.style.cssText = xCss;
+      x.onclick = () => removeBoard(b);
+      row.append(label, x);
+      rows.push(row);
+      for (const sec of catalog.sections[b] || []) {
+        const r2 = document.createElement('div');
+        r2.style.cssText = rowCss + ';padding-left:14px;color:#555';
+        const l2 = Object.assign(document.createElement('span'), { textContent: '└ ' + sec });
+        const x2 = Object.assign(document.createElement('button'), { textContent: '×', title: 'この候補を削除' });
+        x2.style.cssText = xCss;
+        x2.onclick = () => removeSection(b, sec);
+        r2.append(l2, x2);
+        rows.push(r2);
+      }
+    }
+    const clear = Object.assign(document.createElement('button'), { textContent: '候補をすべてクリア' });
+    clear.style.cssText = 'margin-top:6px;padding:3px 6px;cursor:pointer';
+    clear.onclick = () => { catalog = { boards: [], sections: {} }; saveCatalog(); };
+    manageList.replaceChildren(...rows, clear);
+  }
+
   async function savePin() {
     if (!current.board) { toast('先に保存先のボード名を設定してください', true); return; }
     const dropdown = findDropdownButton();
@@ -150,7 +265,11 @@
 
     if (dropdown.getAttribute('aria-expanded') !== 'true') dropdown.click(); // 開いたままなら閉じてしまうので押さない
     const boardEl = await waitFor(() => findInPicker(['保存する'], current.board));
-    if (!boardEl) { toast('ボード「' + current.board + '」が一覧に見つかりません', true); return; }
+    if (!boardEl) {
+      if (findByText(document.body, '保存する')) removeBoard(current.board); // 一覧が開いているのに無い=削除/改名済み
+      toast('ボード「' + current.board + '」が一覧に見つかりません', true);
+      return;
+    }
 
     if (!current.section) {
       realClick(boardEl); // セクション指定なし: ボード行のクリックで保存
@@ -166,7 +285,11 @@
       const header = await waitFor(() => findByText(document.body, 'サブボード'));
       if (!header) { toast('サブボードの画面が開きませんでした(このボードにはサブボードがない可能性)', true); return; }
       const sectionEl = findInPicker(['サブボード'], current.section);
-      if (!sectionEl) { toast('サブボード「' + current.section + '」が見つかりません', true); return; }
+      if (!sectionEl) {
+        removeSection(current.board, current.section);
+        toast('サブボード「' + current.section + '」が見つかりません', true);
+        return;
+      }
       realClick(sectionEl);
     }
   }
@@ -212,6 +335,20 @@
     const section = el('input', { placeholder: 'セクション名(省略可)', value: current.section }, inputCss);
     panel.append(board, section);
 
+    // 入力欄は、クリックで中身を空にして全候補を出し、何も選ばず離れたら元に戻す
+    boardInput = board;
+    boardDl = el('datalist', { id: 'psq-boards' });
+    sectionDl = el('datalist', { id: 'psq-sections' });
+    board.setAttribute('list', 'psq-boards');
+    section.setAttribute('list', 'psq-sections');
+    for (const inp of [board, section]) {
+      let prev = '';
+      inp.addEventListener('focus', () => { prev = inp.value; inp.value = ''; refreshCatalogUI(); });
+      inp.addEventListener('blur', () => { if (!inp.value) inp.value = prev; refreshCatalogUI(); });
+      inp.addEventListener('input', refreshCatalogUI);
+    }
+    panel.append(boardDl, sectionDl);
+
     const row = el('div', {}, 'display:flex;gap:6px;margin-top:4px');
     const setBtn = el('button', { textContent: '設定' }, btnCss + ';background:#555');
     setBtn.onclick = () => setCurrent(board.value, section.value);
@@ -220,6 +357,13 @@
     saveBtn.onclick = () => { setCurrent(board.value, section.value); savePin(); };
     row.append(setBtn, saveBtn);
     panel.appendChild(row);
+
+    const details = el('details', {}, 'margin-top:8px');
+    details.appendChild(el('summary', { textContent: '候補の管理' }, 'cursor:pointer;color:#666'));
+    manageList = el('div', {}, 'max-height:160px;overflow:auto;margin-top:4px');
+    details.appendChild(manageList);
+    panel.appendChild(details);
+    refreshCatalogUI();
 
     if (history.length) {
       panel.appendChild(el('div', { textContent: '履歴' }, 'margin-top:8px;color:#666'));
