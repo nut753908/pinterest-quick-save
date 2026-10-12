@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pinterest Section Quick Save
 // @namespace    local.pinterest.quicksave
-// @version      0.3.4
+// @version      0.3.5
 // @description  「今の保存先」(ボード/セクション。候補を記憶して一覧から選べる)をパネルで設定し、Alt+Sまたはボタンで1ピンずつ保存する。外部通信なし。
 // @match        https://jp.pinterest.com/*
 // @grant        GM_getValue
@@ -12,7 +12,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '0.3.4'; // @version と合わせる
+  const VERSION = '0.3.5'; // @version と合わせる
   const PANEL_ID = 'psq-panel';
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const load = (key, fallback) => {
@@ -355,7 +355,15 @@
     section.setAttribute('list', 'psq-sections');
     for (const inp of [board, section]) {
       let prev = '';
-      inp.addEventListener('focus', () => { prev = inp.value; inp.value = ''; refreshCatalogUI(); });
+      // フォーカス時だけでなくクリック時も空にする(選択後はフォーカスが残るため、空にしないと選んだ候補しか出ない)
+      const clearForList = () => {
+        if (!inp.value) return;
+        prev = inp.value;
+        inp.value = '';
+        refreshCatalogUI();
+      };
+      inp.addEventListener('focus', clearForList);
+      inp.addEventListener('mousedown', clearForList);
       inp.addEventListener('blur', () => { if (!inp.value) inp.value = prev; refreshCatalogUI(); });
       inp.addEventListener('input', refreshCatalogUI);
     }
